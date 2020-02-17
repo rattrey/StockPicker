@@ -1,1 +1,0 @@
-# This is a stock picker that I have created
