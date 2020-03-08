@@ -15,6 +15,9 @@ import sys
 from datetime import date
 import re
 from stockFunctions import Postgres
+from urllib.request import urlopen
+import json
+from stockFunctions import Postgres
 ###############Sector Data Pull#################
 
 class StockScraper(object):
@@ -39,22 +42,27 @@ class StockScraper(object):
         try:
 
             for letter in string.upper():
-                url = requests.get(f'https://www.gurufocus.com/stock_list.php?m_country%5B%5D=USA&a={letter}&p=0&n={n}')
+                url = requests.get(f'https://www.gurufocus.com/stock_list.php?m_country%5B%5D=USAS&m_country[]=USA&m_country[]=CAN&a={letter}&p=0&n={n}')
                 soup = BeautifulSoup(url.text, "html.parser")
 
                 z = soup.find('div', attrs = {'class':'page_links'}).find_all('a',  href=True)[10].contents #extract last page contents from a tag
                 lastPage = int(re.findall(r'\d+', str(z))[0]) #extract value of list and 
 
                 for x in range(0, lastPage - 1):
-                    url2 = requests.get(f'https://www.gurufocus.com/stock_list.php?m_country%5B%5D=USA&a={letter}&p={x}&n={n}')
+                    url2 = requests.get(f'https://www.gurufocus.com/stock_list.php?m_country%5B%5D=USAS&m_country[]=USA&m_country[]=CAN&a={letter}&p={x}&n={n}')
                     soup2 = BeautifulSoup(url2.text, 'html.parser')
 
                     lst = []
+                    lst2 = []
                     for i in range(0, n*7, 7):
                         j = soup2.find_all('a', attrs={'class':'nav'})[i].contents[0]
-                        lst.append(j) 
+                        lst.append(j)
+
+                    for l in range(1,11):
+                        k = soup2.find('table', id = 'R1').find_all('tr')[l].find_all('a')[1].contents[0]
+                        lst2.append(k)
                     
-                    df = pd.DataFrame(lst, columns = ['ticker'])
+                    df = pd.DataFrame({'ticker':lst, 'Name':lst2})
                     df.to_sql(f'{tableName}', self.engine, if_exists = 'append')
 
                 print(letter)
@@ -75,16 +83,6 @@ class StockScraper(object):
         df.to_sql(f'{tableName}', self.engine, if_exists='append')
         print('sector data pulled successfully')
 
-        
-    def getTickerList(self, tableName): #returns ticker list from specified table from postgres
-        '''Pull entire ticker list from postgres table of choice'''
-
-        t = Postgres().postgresQuery(f'select ticker from public."{tableName};')
-        #Cleaning up list
-        tickerList = []
-        for item in t:
-            tickerList.append(list(item)[0])
-        return tickerList
 
 
     #premiumKey = ['Q2H4NWX3SZPHCUG8']
@@ -92,7 +90,7 @@ class StockScraper(object):
     def scrapeDailyData(self, tableName):
         '''Scrape alpha vantage daily stock data and store data into postgres table of choice'''
 
-        tickerListMstr = self.getTickerList('tickerList')
+        tickerListMstr = Postgres().getTickerList('tickerList_v2')
         tickerListMstr.sort()
         counter = len(tickerListMstr)
 
@@ -120,7 +118,7 @@ class StockScraper(object):
 
 
     def scrapeIndustryList(self, tableName):
-        fullList = self.getTickerList('tickerList')
+        fullList = Postgres().getTickerList('tickerList')
         fullList.sort()
         counter = len(fullList)
 
@@ -171,7 +169,7 @@ class StockScraper(object):
 
     def scrapeMarketBeat(self, tableName):
 
-        tickerListMstr = self.getTickerList('tickerList')
+        tickerListMstr = Postgres().getTickerList('tickerList')
         tickerListMstr.sort()
         counter = len(tickerListMstr)
 
@@ -237,5 +235,58 @@ class StockScraper(object):
             except Exception:
                 counter -= 1
                 print (counter, f'{ticker} not found on marketBeat')
+                pass
+
+
+
+class FinancialScrape(object):
+    engine = create_engine('postgresql+psycopg2://attrey:tusr3f@127.0.0.1/postgres')
+
+    def __init__(self):
+        pass
+
+
+    def get_jsonparsed_data(self, url):
+    #'''Receive the content of url, parse it as JSON and return the object. Parameters url : str Returns dict '''
+        response = urlopen(url)
+        data = response.read().decode("utf-8")
+        return json.loads(data)
+
+
+    def getfinancialData(self, sheetType):
+        y = self.get_jsonparsed_data(sheetType)
+        x = y['financials']
+        df = pd.DataFrame.from_dict(x)
+        return df
+    
+
+
+    def financialScrape(self, statementTypeSite, tableName, tickerListTable):
+        """
+        Scrape financial statements from "https://financialmodelingprep.com/api/v3/financials/income-statement/AAPL?period=quarter"
+        Parameters
+        ----------
+        statementTypeSite : str - used to determine the proper url for which to pull and can be one of the following:
+        'balance-sheet', 'income-statement', or 'cash-flow'
+        tableName: str - table name for database upload
+        
+        """
+        #get ticker list from financialscrape website allowing to gather a larger repository
+        tickerList = Postgres().getTickerList(f'{tickerListTable}')
+        counter = len(tickerList)
+
+        for ticker in tickerList:
+            try:
+                statementType = (f"https://financialmodelingprep.com/api/v3/financials/{statementTypeSite}-statement/{ticker}?period=quarter")
+
+                df2 = self.getfinancialData(statementType)
+                df2.columns = [re.sub(r'\W+','', i) for i in df2.columns]
+                df2['ticker'] = f'{ticker}'
+                df2.to_sql(f'{tableName}', self.engine, if_exists='append')
+                counter -= 1
+                print(ticker, counter)
+            except Exception:
+                counter -= 1
+                print(f'{ticker} {counter} not found')
                 pass
 
