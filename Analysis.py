@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 import math
 import seaborn as sns
+from pandas import DataFrame
 
 correlationData = Postgres().postgresQueryDf('''select * from "Regression_12Month" where "ticker" IN ('MSFT', 'AAPL', 'SQ', 'SHOP', 'TDOC', 'AMZN', 'AXP', 'ADBE', 'AMT', 'BL', 'WORK', 'GLPG');''')
 correlationData.columns = Postgres().getColumnNames('Regression_12Month')
