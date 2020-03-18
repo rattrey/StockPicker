@@ -22,7 +22,7 @@ from stockFunctions import Postgres
 
 class StockScraper(object):
 
-    engine = create_engine('postgresql+psycopg2://attrey:tusr3f@127.0.0.1/postgres')
+    engine = create_engine('postgresql+psycopg2://postgres:tusr3f@127.0.0.1/postgres')
 
     def __init__(self):
         pass
@@ -90,7 +90,7 @@ class StockScraper(object):
     def scrapeDailyData(self, tableName):
         '''Scrape alpha vantage daily stock data and store data into postgres table of choice'''
 
-        tickerListMstr = Postgres().getTickerList('tickerList_v2')
+        tickerListMstr = Postgres().getTickerList('TickerList')
         tickerListMstr.sort()
         counter = len(tickerListMstr)
 
@@ -98,7 +98,7 @@ class StockScraper(object):
 
         for ticker in tickerListMstr:
             try:
-                stock = ts.get_daily_adjusted(symbol=f'{ticker}', outputsize='full')
+                stock = ts.get_daily_adjusted(symbol=f'{ticker}', outputsize='compact')
                 #All other metrics
                 df = pd.DataFrame(stock[0])
                 df['ticker'] = [f'{ticker}' for i in df.transpose()]
@@ -239,8 +239,23 @@ class StockScraper(object):
 
 
 
+
+class DataPull(object):
+
+    def pullSingleStock(self, ticker):
+        ts = TimeSeries('Q2H4NWX3SZPHCUG8', output_format='pandas')
+        stock = ts.get_daily_adjusted(symbol=f'{ticker}', outputsize='compact')
+        #All other metrics
+
+        df = pd.DataFrame(stock[0])
+        df['ticker'] = [f'{ticker}' for i in df.transpose()]
+        df.columns = ['open', 'high', 'low', 'close', 'adjusted_close','volume', 'dividend_amount', 'split_coefficient', 'ticker']
+        return df
+
+
+
 class FinancialScrape(object):
-    engine = create_engine('postgresql+psycopg2://attrey:tusr3f@127.0.0.1/postgres')
+    engine = create_engine('postgresql+psycopg2://postgres:tusr3f@127.0.0.1/postgres')
 
     def __init__(self):
         pass
@@ -250,16 +265,12 @@ class FinancialScrape(object):
     #'''Receive the content of url, parse it as JSON and return the object. Parameters url : str Returns dict '''
         response = urlopen(url)
         data = response.read().decode("utf-8")
-        return json.loads(data)
-
-
-    def getfinancialData(self, sheetType):
-        y = self.get_jsonparsed_data(sheetType)
+        y = json.loads(data)
         x = y['financials']
         df = pd.DataFrame.from_dict(x)
         return df
-    
 
+    
 
     def financialScrape(self, statementTypeSite, tableName, tickerListTable):
         """
@@ -277,9 +288,9 @@ class FinancialScrape(object):
 
         for ticker in tickerList:
             try:
-                statementType = (f"https://financialmodelingprep.com/api/v3/financials/{statementTypeSite}-statement/{ticker}?period=quarter")
+                url = (f"https://financialmodelingprep.com/api/v3/financials/{statementTypeSite}-statement/{ticker}?period=quarter")
 
-                df2 = self.getfinancialData(statementType)
+                df2 = self.get_jsonparsed_data(url)
                 df2.columns = [re.sub(r'\W+','', i) for i in df2.columns]
                 df2['ticker'] = f'{ticker}'
                 df2.to_sql(f'{tableName}', self.engine, if_exists='append')
