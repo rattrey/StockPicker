@@ -138,3 +138,14 @@ class GrowthFeatures(object):
                     counter -= 1
                     pass
 
+
+    def growth(self, lst, stepVal):
+        growthList = []
+        x = lst[::stepVal]
+
+        for previous, current in zip(x, x[1:]):
+            y = ((current / previous) - 1) * 100
+            growthList.append(y)
+
+        return growthList
+

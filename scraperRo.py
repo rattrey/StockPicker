@@ -244,7 +244,7 @@ class DataPull(object):
 
     def pullSingleStock(self, ticker):
         ts = TimeSeries('Q2H4NWX3SZPHCUG8', output_format='pandas')
-        stock = ts.get_daily_adjusted(symbol=f'{ticker}', outputsize='compact')
+        stock = ts.get_daily_adjusted(symbol=f'{ticker}', outputsize='full')
         #All other metrics
 
         df = pd.DataFrame(stock[0])
