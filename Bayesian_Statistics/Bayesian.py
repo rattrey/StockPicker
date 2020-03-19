@@ -15,7 +15,6 @@ def growth(lst, stepVal):
     return growthList
 
 
-len(disasters_array)
 
 
 df = DataPull().pullSingleStock('MSFT')
